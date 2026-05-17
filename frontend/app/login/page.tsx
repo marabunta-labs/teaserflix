@@ -3,9 +3,11 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useTranslation } from "@/lib/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [mode, setMode] = useState<"sign_in" | "sign_up">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -13,7 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  // If already logged in, redirect to feed immediately
+  // Redirect to feed if already authenticated
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) router.replace("/");
@@ -39,7 +41,7 @@ export default function LoginPage() {
       if (error) {
         setError(error.message);
       } else {
-        setMessage("¡Cuenta creada! Revisa tu email para confirmar la cuenta.");
+        setMessage(t.login.successMessage);
       }
       setLoading(false);
     }
@@ -79,7 +81,7 @@ export default function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Contraseña"
+            placeholder={t.login.passwordPlaceholder}
             required
             autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
             className={inputCls}
@@ -93,7 +95,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-full bg-red-600 py-3 font-bold text-white uppercase tracking-widest hover:bg-red-700 disabled:opacity-50 transition"
           >
-            {loading ? "…" : mode === "sign_in" ? "Iniciar sesión" : "Crear cuenta"}
+            {loading ? "…" : mode === "sign_in" ? t.login.signIn : t.login.createAccount}
           </button>
         </form>
 
@@ -109,7 +111,7 @@ export default function LoginPage() {
             <path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332Z"/>
             <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58Z"/>
           </svg>
-          Continuar con Google
+          {t.login.googleContinue}
         </button>
 
         {/* Toggle sign-in / sign-up */}
@@ -117,19 +119,19 @@ export default function LoginPage() {
           onClick={() => { setMode(mode === "sign_in" ? "sign_up" : "sign_in"); setError(""); setMessage(""); }}
           className="mt-4 w-full text-zinc-500 text-sm hover:text-zinc-300 transition"
         >
-          {mode === "sign_in" ? "¿Sin cuenta? Regístrate gratis" : "¿Ya tienes cuenta? Inicia sesión"}
+          {mode === "sign_in" ? t.login.switchToSignUp : t.login.switchToSignIn}
         </button>
 
         {/* Continue as guest */}
         <div className="mt-6 border-t border-zinc-800 pt-6 text-center">
           <p className="mb-3 text-xs text-zinc-600">
-            Sin cuenta el feed no será personalizado, pero puedes echar un vistazo.
+            {t.login.guestNote}
           </p>
           <button
             onClick={() => router.push("/")}
             className="w-full rounded-full border border-zinc-700 py-3 text-sm text-zinc-400 hover:text-white hover:border-zinc-500 transition"
           >
-            Continuar sin cuenta →
+            {t.login.continueGuest}
           </button>
         </div>
       </div>

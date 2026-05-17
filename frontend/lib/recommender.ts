@@ -36,11 +36,26 @@ export class Recommender {
   private seenIds = new Set<number>();
   private userId: string | null;
 
+  private static readonly GUEST_SEEN_KEY = "teaserflix_seen_ids";
+
   constructor(userId: string | null, initialGenres: number[] = []) {
     this.userId = userId;
     // Seed with preferred genres from the onboarding step
     for (const gid of initialGenres) {
       this.genreScores[gid] = (this.genreScores[gid] ?? 0) + 10;
+    }
+    // Restore guest seen-IDs from localStorage
+    if (!userId && typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(Recommender.GUEST_SEEN_KEY);
+        if (raw) {
+          const ids: number[] = JSON.parse(raw);
+          ids.forEach((id) => this.seenIds.add(id));
+          console.log(`[Recommender] Restored ${ids.length} guest seen-IDs from localStorage`);
+        }
+      } catch {
+        // ignore corrupt data
+      }
     }
     console.log(
       `[Recommender] Init userId=${userId ?? "guest"} seedGenres=[${initialGenres.join(",")}]`,
@@ -51,6 +66,15 @@ export class Recommender {
 
   markSeen(movieId: number) {
     this.seenIds.add(movieId);
+    // Persist to localStorage for guest users so seen-IDs survive page reloads
+    if (!this.userId && typeof window !== "undefined") {
+      try {
+        const ids = Array.from(this.seenIds).slice(-500); // keep last 500
+        localStorage.setItem(Recommender.GUEST_SEEN_KEY, JSON.stringify(ids));
+      } catch {
+        // ignore quota errors
+      }
+    }
   }
 
   hasSeen(movieId: number): boolean {
@@ -129,7 +153,7 @@ export class Recommender {
       .select("movie_id, genre_ids, watch_time, is_fast_scroll, is_full_watch, is_interested")
       .eq("user_id", this.userId)
       .order("created_at", { ascending: false })
-      .limit(300);
+      .limit(500);
 
     if (error) {
       console.error("[Recommender] Failed to load history:", error.message);
