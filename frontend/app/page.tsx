@@ -17,7 +17,6 @@ import {
   SlidersHorizontal,
   ChevronLeft,
   X,
-  Info,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactPlayer from "react-player";
@@ -402,6 +401,9 @@ function TrailerCard({
   const progressBarRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const playIconTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const swipeTouchStartXRef = useRef(0);
+  const swipeTouchStartYRef = useRef(0);
+  const [showSwipeBookmark, setShowSwipeBookmark] = useState(false);
 
   const showPlayPauseIndicator = useCallback((type: "play" | "pause") => {
     setShowPlayPauseIcon(type);
@@ -511,6 +513,10 @@ function TrailerCard({
   const handlePressStart = (e: React.TouchEvent | React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, [data-progress-bar]")) return;
     wasLongPressRef.current = false;
+    if ("touches" in e && e.touches.length > 0) {
+      swipeTouchStartXRef.current = e.touches[0].clientX;
+      swipeTouchStartYRef.current = e.touches[0].clientY;
+    }
     longPressTimerRef.current = setTimeout(() => {
       wasLongPressRef.current = true;
       setPlaybackRate(2);
@@ -520,6 +526,20 @@ function TrailerCard({
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     if (wasLongPressRef.current) setPlaybackRate(1);
     if (isDraggingRef.current) { isDraggingRef.current = false; setIsSeeking(false); }
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const wasDragging = isDraggingRef.current;
+    handlePressEnd();
+    if (!wasDragging && e.changedTouches.length > 0) {
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - swipeTouchStartXRef.current;
+      const deltaY = Math.abs(touch.clientY - swipeTouchStartYRef.current);
+      if (deltaX > 80 && deltaY < 60) {
+        setShowSwipeBookmark(true);
+        setTimeout(() => setShowSwipeBookmark(false), 700);
+        onToggleBookmark();
+      }
+    }
   };
   const handleCardMouseMove = (e: React.MouseEvent) => {
     if (isDraggingRef.current) seekToClientX(e.clientX);
@@ -554,7 +574,7 @@ function TrailerCard({
       onMouseLeave={handlePressEnd}
       onMouseMove={handleCardMouseMove}
       onTouchStart={handlePressStart}
-      onTouchEnd={handlePressEnd}
+      onTouchEnd={handleTouchEnd}
     >
       <img
         src={`https://image.tmdb.org/t/p/original${movie.poster_path}`}
@@ -642,7 +662,26 @@ function TrailerCard({
         )}
       </AnimatePresence>
 
-      <div className="absolute bottom-24 left-4 right-20 z-20 pointer-events-none">
+      <AnimatePresence>
+        {showSwipeBookmark && (
+          <motion.div
+            initial={{ opacity: 0, x: -60 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -60 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="absolute inset-0 z-50 flex items-center justify-start pl-8 pointer-events-none"
+          >
+            <div className="bg-yellow-400/80 rounded-full p-5">
+              <Bookmark size={48} className="text-black fill-black" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div
+        className="absolute bottom-24 left-4 right-20 z-20 cursor-pointer active:opacity-80"
+        onClick={(e) => { e.stopPropagation(); onInfo(); }}
+      >
         <h2 className="text-3xl font-bold text-white uppercase tracking-wider mb-1 drop-shadow-xl">
           {movie.title}
         </h2>
@@ -658,11 +697,6 @@ function TrailerCard({
         <button onClick={(e) => { e.stopPropagation(); onToggleBookmark(); }} className="transition active:scale-90">
           <div className="bg-white/20 p-3 rounded-full backdrop-blur-lg">
             <Bookmark size={26} className={`transition-colors ${isBookmarked ? "text-yellow-400 fill-yellow-400" : "text-white"}`} />
-          </div>
-        </button>
-        <button onClick={(e) => { e.stopPropagation(); onInfo(); }} className="transition active:scale-90">
-          <div className="bg-white/20 p-3 rounded-full backdrop-blur-lg">
-            <Info size={26} className="text-white" />
           </div>
         </button>
         <button
@@ -683,7 +717,7 @@ function TrailerCard({
         </button>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 z-30 px-4 pb-5">
+      <div className="absolute bottom-0 left-0 right-0 z-30 px-4" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
         <div className="flex justify-between text-white/50 text-[10px] mb-1.5 select-none pointer-events-none">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
@@ -1151,6 +1185,19 @@ export default function TeaserflixFeed() {
     showToast(t.feed.toastLinkCopied);
   }, [showToast, t.feed.toastLinkCopied]);
 
+  // Desktop keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown") {
+        document.getElementById(`video-${activeIndexRef.current + 1}`)?.scrollIntoView({ behavior: "smooth" });
+      } else if (e.key === "ArrowUp") {
+        document.getElementById(`video-${activeIndexRef.current - 1}`)?.scrollIntoView({ behavior: "smooth" });
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const hasFilters = activeGenres.length > 0 || activePlatforms.length > 0;
 
   if (!authChecked) {
@@ -1164,7 +1211,7 @@ export default function TeaserflixFeed() {
   return (
     <main className="h-screen w-full bg-black overflow-y-scroll snap-y snap-mandatory no-scrollbar relative">
       {/* Top bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pt-8 pb-2 pointer-events-none">
+      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pb-2 pointer-events-none" style={{ paddingTop: 'max(2rem, env(safe-area-inset-top))' }}>
         <span className="text-white font-black uppercase tracking-tighter text-xl pointer-events-none">
           Teaser<span className="text-red-600">flix</span>
         </span>
@@ -1266,7 +1313,7 @@ export default function TeaserflixFeed() {
       {/* Feed */}
       {movies.length > 0 ? (
         movies.map((movie, index) => (
-          <div key={`${movie.id}-${index}`} id={`video-${index}`} className="h-screen w-full snap-start relative">
+          <div key={`${movie.id}-${index}`} id={`video-${index}`} className="h-[100dvh] w-full snap-start relative">
             <TrailerCard
               movie={movie}
               locale={locale}
