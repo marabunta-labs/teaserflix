@@ -21,8 +21,69 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "TeaserFlix",
-  description: "Discover movies through their trailers",
+  title: {
+    default: "TeaserFlix — Descubre películas a través de sus tráilers",
+    template: "%s | TeaserFlix",
+  },
+  description:
+    "Descubre tu próxima película favorita en segundos. TeaserFlix es un feed infinito de tráilers con recomendaciones personalizadas.",
+  keywords: [
+    "películas",
+    "tráilers",
+    "movies",
+    "trailers",
+    "recomendaciones",
+    "watchlist",
+    "streaming",
+    "TeaserFlix",
+  ],
+  authors: [{ name: "Marabunta Labs", url: "https://marabunta-labs.vercel.app" }],
+  creator: "Marabunta Labs",
+  publisher: "Marabunta Labs",
+  metadataBase: new URL("https://teaserflix.vercel.app"),
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "es_ES",
+    alternateLocale: "en_US",
+    url: "https://teaserflix.vercel.app",
+    siteName: "TeaserFlix",
+    title: "TeaserFlix — Descubre películas a través de sus tráilers",
+    description:
+      "Feed infinito de tráilers con recomendaciones personalizadas. Guarda tu watchlist, filtra por plataforma y género.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "TeaserFlix — feed infinito de tráilers",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TeaserFlix — Descubre películas a través de sus tráilers",
+    description:
+      "Feed infinito de tráilers con recomendaciones personalizadas.",
+    images: ["/og-image.png"],
+    creator: "@marabunta_labs",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Password / Restablecer Contraseña - Teaserflix</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0b0b0b;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #ffffff;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 100%;
+      table-layout: fixed;
+      background-color: #0b0b0b;
+      padding: 40px 0;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      background-color: #141414;
+      border-radius: 12px;
+      border: 1px solid #262626;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+    .header {
+      background-color: #1a1a1a;
+      padding: 30px;
+      text-align: center;
+      border-bottom: 2px solid #e50914;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-decoration: none;
+    }
+    .logo-img {
+      max-height: 45px;
+      width: auto;
+      display: inline-block;
+      vertical-align: middle;
+      border: none;
+    }
+    .content {
+      padding: 40px 30px;
+      text-align: center;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-top: 0;
+      margin-bottom: 16px;
+      color: #ffffff;
+    }
+    p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #b3b3b3;
+      margin-top: 0;
+      margin-bottom: 24px;
+    }
+    .btn-container {
+      margin: 30px 0;
+    }
+    .button {
+      background-color: #e50914;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 14px 32px;
+      font-weight: 700;
+      font-size: 15px;
+      border-radius: 30px;
+      display: inline-block;
+      transition: background-color 0.2s ease;
+      box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3);
+    }
+    .divider {
+      height: 1px;
+      background-color: #262626;
+      margin: 40px 0;
+      width: 100%;
+    }
+    .footer {
+      padding: 20px 30px;
+      background-color: #0d0d0d;
+      text-align: center;
+      font-size: 12px;
+      color: #666666;
+      border-top: 1px solid #1f1f1f;
+    }
+    .footer-link {
+      color: #e50914;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <center class="wrapper">
+    <div class="container">
+      
+      <div class="header">
+        <a href="https://teaserflix.vercel.app/" style="text-decoration: none; display: inline-block;">
+          <img src="https://raw.githubusercontent.com/marabunta-labs/teaserflix/refs/heads/main/resources/logo.png" alt="Icono" class="logo-img" style="margin-right: 12px;" />
+          <span class="logo">
+            <span style="color: #ffffff;">Teaser</span><span style="color: #e50914;">flix</span>
+          </span>
+        </a>
+      </div>
+
+      <div class="content">
+        <h1>Forgot your password?</h1>
+        <p>Don't worry, it happens to the best of us. We received a request to reset the password for your Teaserflix account.</p>
+        <p>Click the button below to choose a new one:</p>
+        
+        <div class="btn-container">
+          <a href="{{ .ConfirmationURL }}" class="button">Reset password</a>
+        </div>
+        
+        <p style="font-size: 13px; color: #666666; margin-bottom: 0;">
+          If you didn't request this change, you can safely ignore this email.
+        </p>
+
+        <div class="divider"></div>
+
+        <h1>¿Olvidaste tu contraseña?</h1>
+        <p>No te preocupes, nos pasa a todos de vez en cuando. Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en Teaserflix.</p>
+        <p>Haz clic en el botón de abajo para elegir una nueva:</p>
+        
+        <div class="btn-container">
+          <a href="{{ .ConfirmationURL }}" class="button">Restablecer contraseña</a>
+        </div>
+        
+        <p style="font-size: 13px; color: #666666; margin-bottom: 0;">
+          Si no has solicitado este cambio, puedes ignorar este correo de forma segura.
+        </p>
+      </div>
+
+      <div class="footer">
+        <p style="margin-bottom: 12px;">
+          <a href="https://teaserflix.vercel.app/" class="footer-link">teaserflix.vercel.app</a>
+        </p>
+        <p style="margin-bottom: 8px; color: #666666;">This is an automated email sent by Teaserflix. / Este es un correo automático enviado por Teaserflix.</p>
+        <p style="margin: 0; color: #666666;">&copy; 2026 Teaserflix. All rights reserved.</p>
+      </div>
+
+    </div>
+  </center>
+</body>
+</html>

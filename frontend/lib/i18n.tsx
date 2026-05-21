@@ -110,6 +110,12 @@ const en = {
     continueGuest: "Continue without account →",
     successMessage:
       "Account created! Check your email to confirm.",
+    forgotPassword: "Forgot your password?",
+    forgotTitle: "Reset your password",
+    forgotDesc: "Enter your email and we\u2019ll send you a reset link.",
+    sendReset: "Send reset link",
+    resetSent: "Check your email for the reset link.",
+    backToLogin: "← Back to sign in",
   },
 };
 
@@ -205,6 +211,12 @@ const es: typeof en = {
     continueGuest: "Continuar sin cuenta →",
     successMessage:
       "¡Cuenta creada! Revisa tu email para confirmar la cuenta.",
+    forgotPassword: "¿Olvidaste tu contraseña?",
+    forgotTitle: "Recupera tu contraseña",
+    forgotDesc: "Introduce tu email y te enviaremos un enlace para restablecerla.",
+    sendReset: "Enviar enlace",
+    resetSent: "Revisa tu email para el enlace de recuperación.",
+    backToLogin: "← Volver al inicio de sesión",
   },
 };
 

@@ -135,8 +135,8 @@ export default function ProfilePage() {
   // ── Loading ───────────────────────────────────────────────
   if (!authChecked) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-black text-white">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
+      <div className="flex h-screen w-full items-center justify-center bg-black">
+        <img src="/logo.gif" alt="" className="w-32 h-auto" />
       </div>
     );
   }

@@ -261,12 +261,15 @@ export async function checkMoviesHaveTrailers(
 
 // Platforms — names are the same in both languages
 export const PLATFORMS = [
-  { id: 8, name: "Netflix" },
-  { id: 119, name: "Prime Video" },
-  { id: 337, name: "Disney+" },
+  { id: 8,    name: "Netflix" },
+  { id: 119,  name: "Prime Video" },
+  { id: 337,  name: "Disney+" },
   { id: 1899, name: "Max" },
-  { id: 350, name: "Apple TV+" },
-  { id: 531, name: "Paramount+" },
+  { id: 350,  name: "Apple TV+" },
+  { id: 531,  name: "Paramount+" },
+  { id: 64,   name: "Filmin" },
+  { id: 1773, name: "SkyShowtime" },
+  { id: 149,  name: "Movistar+" },
 ] as const;
 
 // Genres with bilingual names — use genre.name[locale]

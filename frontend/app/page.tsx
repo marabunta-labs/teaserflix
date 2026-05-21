@@ -16,6 +16,7 @@ import {
   Search,
   SlidersHorizontal,
   ChevronLeft,
+  ChevronRight,
   X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -354,6 +355,7 @@ interface TrailerCardProps {
   onInfo: () => void;
   onNoTrailer: (movieId: number) => void;
   onShareCopied: () => void;
+  onExposeControls: (controls: { seek: (delta: number) => void; togglePlay: () => void }) => void;
 }
 
 function TrailerCard({
@@ -373,6 +375,7 @@ function TrailerCard({
   onInfo,
   onNoTrailer,
   onShareCopied,
+  onExposeControls,
 }: TrailerCardProps) {
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [trailerStatus, setTrailerStatus] = useState<"idle" | "loading" | "found" | "not_found">("idle");
@@ -385,11 +388,14 @@ function TrailerCard({
   const [duration, setDuration] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const [showPlayPauseIcon, setShowPlayPauseIcon] = useState<"play" | "pause" | null>(null);
+  const [showSeekIndicator, setShowSeekIndicator] = useState<"back" | "forward" | null>(null);
 
   const { ref, inView } = useInView({ threshold: 0.5 });
   const playerRef = useRef<any>(null);
   const activeIndexRef = useRef(activeIndex);
   activeIndexRef.current = activeIndex;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
 
   const enterTimeRef = useRef<number>(0);
   const isFullWatchRef = useRef(false);
@@ -403,6 +409,8 @@ function TrailerCard({
   const playIconTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const swipeTouchStartXRef = useRef(0);
   const swipeTouchStartYRef = useRef(0);
+  const tapXRatioRef = useRef(0.5);
+  const currentTimeRef = useRef(0);
   const [showSwipeBookmark, setShowSwipeBookmark] = useState(false);
 
   const showPlayPauseIndicator = useCallback((type: "play" | "pause") => {
@@ -418,6 +426,7 @@ function TrailerCard({
       const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       const newTime = fraction * (playerRef.current.duration || duration);
       playerRef.current.currentTime = newTime;
+      currentTimeRef.current = newTime;
       setCurrentTime(newTime);
     },
     [duration],
@@ -464,6 +473,25 @@ function TrailerCard({
       }
 
       onBecomeActive(myIndex);
+      onExposeControls({
+        seek: (delta: number) => {
+          if (!playerRef.current) return;
+          const dur = playerRef.current.duration || 0;
+          const newTime = Math.max(0, Math.min(dur, currentTimeRef.current + delta));
+          playerRef.current.currentTime = newTime;
+          currentTimeRef.current = newTime;
+          setCurrentTime(newTime);
+          setShowSeekIndicator(delta < 0 ? "back" : "forward");
+          setTimeout(() => setShowSeekIndicator(null), 700);
+        },
+        togglePlay: () => {
+          setIsPlaying((prev) => {
+            const next = !prev;
+            showPlayPauseIndicator(next ? "play" : "pause");
+            return next;
+          });
+        },
+      });
       isFullWatchRef.current = false;
       const t = setTimeout(() => setIsPlaying(true), 250);
       return () => clearTimeout(t);
@@ -493,6 +521,36 @@ function TrailerCard({
   const handleTap = useCallback(() => {
     if (wasLongPressRef.current) { wasLongPressRef.current = false; return; }
     tapCountRef.current += 1;
+    const xRatio = tapXRatioRef.current;
+
+    // Left / right zones: seek immediately, no double-tap window needed
+    if (tapCountRef.current === 1 && xRatio < 0.33) {
+      tapCountRef.current = 0;
+      if (playerRef.current) {
+        const newTime = Math.max(0, currentTimeRef.current - 10);
+        playerRef.current.currentTime = newTime;
+        currentTimeRef.current = newTime;
+        setCurrentTime(newTime);
+      }
+      setShowSeekIndicator("back");
+      setTimeout(() => setShowSeekIndicator(null), 700);
+      return;
+    }
+    if (tapCountRef.current === 1 && xRatio > 0.67) {
+      tapCountRef.current = 0;
+      if (playerRef.current) {
+        const dur = playerRef.current.duration || duration;
+        const newTime = Math.min(dur, currentTimeRef.current + 10);
+        playerRef.current.currentTime = newTime;
+        currentTimeRef.current = newTime;
+        setCurrentTime(newTime);
+      }
+      setShowSeekIndicator("forward");
+      setTimeout(() => setShowSeekIndicator(null), 700);
+      return;
+    }
+
+    // Center zone: single tap = play/pause, double tap = like
     if (tapCountRef.current === 1) {
       tapTimerRef.current = setTimeout(() => {
         tapCountRef.current = 0;
@@ -508,7 +566,7 @@ function TrailerCard({
       if (!isLiked) { setShowGiantHeart(true); setTimeout(() => setShowGiantHeart(false), 800); }
       onToggleLike();
     }
-  }, [isLiked, onToggleLike, showPlayPauseIndicator]);
+  }, [isLiked, onToggleLike, showPlayPauseIndicator, duration]);
 
   const handlePressStart = (e: React.TouchEvent | React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, [data-progress-bar]")) return;
@@ -516,6 +574,9 @@ function TrailerCard({
     if ("touches" in e && e.touches.length > 0) {
       swipeTouchStartXRef.current = e.touches[0].clientX;
       swipeTouchStartYRef.current = e.touches[0].clientY;
+      tapXRatioRef.current = e.touches[0].clientX / window.innerWidth;
+    } else {
+      tapXRatioRef.current = (e as React.MouseEvent).clientX / window.innerWidth;
     }
     longPressTimerRef.current = setTimeout(() => {
       wasLongPressRef.current = true;
@@ -597,9 +658,17 @@ function TrailerCard({
             onEnded={handleEnded}
             onReady={() => setIsPlayerReady(true)}
             onPlay={() => setIsActuallyPlaying(true)}
-            onPause={() => setIsActuallyPlaying(false)}
+            onPause={() => {
+              setIsActuallyPlaying(false);
+              // External pause (e.g. Low Power Mode) — sync our state so a single tap resumes
+              if (isPlayingRef.current) setIsPlaying(false);
+            }}
             onTimeUpdate={(e: any) => {
-              if (!isDraggingRef.current) setCurrentTime(e.currentTarget.currentTime ?? 0);
+              if (!isDraggingRef.current) {
+                const t = e.currentTarget.currentTime ?? 0;
+                currentTimeRef.current = t;
+                setCurrentTime(t);
+              }
             }}
             onDurationChange={(e: any) => setDuration(e.currentTarget.duration)}
             config={{
@@ -673,6 +742,70 @@ function TrailerCard({
           >
             <div className="bg-yellow-400/80 rounded-full p-5">
               <Bookmark size={48} className="text-black fill-black" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Seek zone hints — shown when paused so the user discovers the left/right tap zones */}
+      {!isActuallyPlaying && trailerStatus === "found" && (
+        <>
+          <div className="absolute inset-y-0 left-0 w-1/3 z-10 flex items-center justify-center pointer-events-none">
+            <div className="bg-black/50 rounded-full px-4 py-3 flex flex-col items-center gap-1 opacity-40">
+              <div className="flex">
+                <ChevronLeft size={28} className="text-white -mr-3" />
+                <ChevronLeft size={28} className="text-white" />
+              </div>
+              <span className="text-white text-xs font-bold">10&Prime;</span>
+            </div>
+          </div>
+          <div className="absolute inset-y-0 right-0 w-1/3 z-10 flex items-center justify-center pointer-events-none">
+            <div className="bg-black/50 rounded-full px-4 py-3 flex flex-col items-center gap-1 opacity-40">
+              <div className="flex">
+                <ChevronRight size={28} className="text-white -mr-3" />
+                <ChevronRight size={28} className="text-white" />
+              </div>
+              <span className="text-white text-xs font-bold">10&Prime;</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Seek indicators — left/right tap zones (visible even when paused) */}
+      <AnimatePresence>
+        {showSeekIndicator === "back" && (
+          <motion.div
+            key="seek-back"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="absolute inset-y-0 left-0 w-1/3 z-50 flex items-center justify-center pointer-events-none"
+          >
+            <div className="bg-black/50 rounded-full px-4 py-3 flex flex-col items-center gap-1">
+              <div className="flex">
+                <ChevronLeft size={28} className="text-white -mr-3" />
+                <ChevronLeft size={28} className="text-white" />
+              </div>
+              <span className="text-white text-xs font-bold">10&Prime;</span>
+            </div>
+          </motion.div>
+        )}
+        {showSeekIndicator === "forward" && (
+          <motion.div
+            key="seek-forward"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="absolute inset-y-0 right-0 w-1/3 z-50 flex items-center justify-center pointer-events-none"
+          >
+            <div className="bg-black/50 rounded-full px-4 py-3 flex flex-col items-center gap-1">
+              <div className="flex">
+                <ChevronRight size={28} className="text-white -mr-3" />
+                <ChevronRight size={28} className="text-white" />
+              </div>
+              <span className="text-white text-xs font-bold">10&Prime;</span>
             </div>
           </motion.div>
         )}
@@ -869,7 +1002,11 @@ export default function TeaserflixFeed() {
         await rec.loadHistoryFromSupabase();
         recommenderRef.current = rec;
 
-        if (prefProviders.length > 0 && activePlatforms.length === 0) {
+        if (prefGenres.length > 0) {
+          setActiveGenres(prefGenres);
+          activeGenresRef.current = prefGenres;
+        }
+        if (prefProviders.length > 0) {
           setActivePlatforms(prefProviders);
           activePlatformsRef.current = prefProviders;
         }
@@ -1185,13 +1322,48 @@ export default function TeaserflixFeed() {
     showToast(t.feed.toastLinkCopied);
   }, [showToast, t.feed.toastLinkCopied]);
 
+  // Keep --app-height in sync with the actual visible viewport height.
+  // On iOS Safari, window.innerHeight reflects the *visible* area (excluding browser chrome),
+  // while 100dvh can still include the collapsible address bar height and cause next-card peek.
+  useEffect(() => {
+    const update = () =>
+      document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
   // Desktop keyboard navigation
+  const activeCardControlsRef = useRef<{ seek: (delta: number) => void; togglePlay: () => void } | null>(null);
+  const handleExposeControls = useCallback((controls: { seek: (delta: number) => void; togglePlay: () => void }) => {
+    activeCardControlsRef.current = controls;
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown") {
-        document.getElementById(`video-${activeIndexRef.current + 1}`)?.scrollIntoView({ behavior: "smooth" });
-      } else if (e.key === "ArrowUp") {
-        document.getElementById(`video-${activeIndexRef.current - 1}`)?.scrollIntoView({ behavior: "smooth" });
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          document.getElementById(`video-${activeIndexRef.current + 1}`)?.scrollIntoView({ behavior: "smooth" });
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          document.getElementById(`video-${activeIndexRef.current - 1}`)?.scrollIntoView({ behavior: "smooth" });
+          break;
+        case " ":
+          e.preventDefault();
+          activeCardControlsRef.current?.togglePlay();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          activeCardControlsRef.current?.seek(-10);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          activeCardControlsRef.current?.seek(10);
+          break;
       }
     };
     window.addEventListener("keydown", handler);
@@ -1202,14 +1374,14 @@ export default function TeaserflixFeed() {
 
   if (!authChecked) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-black text-white">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
+      <div className="flex h-screen w-full items-center justify-center bg-black">
+        <img src="/logo.gif" alt="" className="w-32 h-auto" />
       </div>
     );
   }
 
   return (
-    <main className="h-screen w-full bg-black overflow-y-scroll snap-y snap-mandatory no-scrollbar relative">
+    <main className="w-full bg-black overflow-y-scroll snap-y snap-mandatory no-scrollbar relative" style={{ height: 'var(--app-height, 100dvh)' }}>
       {/* Top bar */}
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pb-2 pointer-events-none" style={{ paddingTop: 'max(2rem, env(safe-area-inset-top))' }}>
         <span className="text-white font-black uppercase tracking-tighter text-xl pointer-events-none">
@@ -1313,7 +1485,7 @@ export default function TeaserflixFeed() {
       {/* Feed */}
       {movies.length > 0 ? (
         movies.map((movie, index) => (
-          <div key={`${movie.id}-${index}`} id={`video-${index}`} className="h-[100dvh] w-full snap-start relative">
+          <div key={`${movie.id}-${index}`} id={`video-${index}`} className="w-full snap-start relative" style={{ height: 'var(--app-height, 100dvh)' }}>
             <TrailerCard
               movie={movie}
               locale={locale}
@@ -1331,13 +1503,14 @@ export default function TeaserflixFeed() {
               onInfo={() => setInfoMovieId(movie.id)}
               onNoTrailer={handleNoTrailer}
               onShareCopied={handleShareCopied}
+              onExposeControls={handleExposeControls}
             />
           </div>
         ))
       ) : (
-        <div className="flex h-screen items-center justify-center text-white">
+        <div className="flex h-screen items-center justify-center bg-black">
           <div className="text-center">
-            <div className="mb-4 mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            <img src="/logo.gif" alt="" className="w-32 h-auto mx-auto mb-4" />
             <p className="text-zinc-400">{t.feed.loading}</p>
           </div>
         </div>
@@ -1383,6 +1556,15 @@ export default function TeaserflixFeed() {
           setActiveGenres(genres);
           setActivePlatforms(platforms);
           setFilterNoTrailer(noTrailer);
+          // Persist preferences so they survive page reloads
+          if (user) {
+            supabase.from("profiles").upsert({
+              id: user.id,
+              preferred_genres: genres,
+              preferred_providers: platforms,
+              updated_at: new Date().toISOString(),
+            }).then(() => {});
+          }
         }}
         onClose={() => setShowFilters(false)}
       />
