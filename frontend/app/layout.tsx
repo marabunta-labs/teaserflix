@@ -22,20 +22,61 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "TeaserFlix — Descubre películas a través de sus tráilers",
+    default: "TeaserFlix — Swipe Movie Trailers & Discover Films",
     template: "%s | TeaserFlix",
   },
   description:
-    "Descubre tu próxima película favorita en segundos. TeaserFlix es un feed infinito de tráilers con recomendaciones personalizadas.",
+    "TikTok for movies. Swipe through infinite trailers, save your watchlist, and get personalized recommendations. Descubre tu próxima película favorita en segundos.",
   keywords: [
+    // TikTok-style movie discovery
+    "tiktok for movies",
+    "tiktok movies",
+    "tiktokmovies",
+    "tiktok trailer",
+    "movie tiktok",
+    "movies swipe",
+    "swipe movies",
+    "movie scroll",
+    "scroll movies",
+    "trailer flix",
+    "trailerflix",
+    "movie feed",
+    "infinite movie trailers",
+    "movie discovery app",
+    "swipe trailers",
+    "trailer swipe",
+    "short movie trailers",
+    "movie reels",
+    // Generic discovery
+    "discover movies",
+    "movie recommendations",
+    "personalized movie recommendations",
+    "what to watch",
+    "movie watchlist",
+    "best movies to watch",
+    "find movies",
+    // Spanish
     "películas",
     "tráilers",
+    "descubrir películas",
+    "recomendaciones de películas",
+    "qué ver",
+    "watchlist películas",
+    "tráilers cortos",
+    "feed de tráilers",
+    "películas para ver",
+    // Brand
+    "TeaserFlix",
+    "teaserflix",
+    // Streaming context
+    "streaming",
+    "netflix",
+    "prime video",
+    "disney plus",
     "movies",
     "trailers",
-    "recomendaciones",
-    "watchlist",
-    "streaming",
-    "TeaserFlix",
+    "cinema",
+    "film discovery",
   ],
   authors: [{ name: "Marabunta Labs", url: "https://marabunta-labs.vercel.app" }],
   creator: "Marabunta Labs",
@@ -43,30 +84,38 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://teaserflix.vercel.app"),
   alternates: {
     canonical: "/",
+    languages: {
+      "es": "https://teaserflix.vercel.app",
+      "en": "https://teaserflix.vercel.app",
+      "x-default": "https://teaserflix.vercel.app",
+    },
+  },
+  verification: {
+    google: "9E9qC957fjoZRJkZ-oF2MVGW07hf21zbklJXKRMtToY",
   },
   openGraph: {
     type: "website",
-    locale: "es_ES",
-    alternateLocale: "en_US",
+    locale: "en_US",
+    alternateLocale: ["es_ES"],
     url: "https://teaserflix.vercel.app",
     siteName: "TeaserFlix",
-    title: "TeaserFlix — Descubre películas a través de sus tráilers",
+    title: "TeaserFlix — TikTok for Movies",
     description:
-      "Feed infinito de tráilers con recomendaciones personalizadas. Guarda tu watchlist, filtra por plataforma y género.",
+      "Swipe through infinite trailers, save your watchlist, and get personalized movie recommendations. · Descubre tu próxima película favorita deslizando tráilers.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "TeaserFlix — feed infinito de tráilers",
+        alt: "TeaserFlix — Swipe movie trailers",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "TeaserFlix — Descubre películas a través de sus tráilers",
+    title: "TeaserFlix — TikTok for Movies",
     description:
-      "Feed infinito de tráilers con recomendaciones personalizadas.",
+      "Swipe trailers. Discover films. Save your watchlist. · Desliza tráilers. Descubre películas.",
     images: ["/og-image.png"],
     creator: "@marabunta_labs",
   },
@@ -97,9 +146,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ClientProviders>{children}</ClientProviders>
+        <ClientProviders>
+          {children}
+        </ClientProviders>
+        <Analytics />
       </body>
     </html>
   );
 }
-
