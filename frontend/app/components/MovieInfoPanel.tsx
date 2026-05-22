@@ -244,6 +244,14 @@ export function MovieInfoPanel({
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 35, stiffness: 350 }}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.4 }}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 80 || info.velocity.y > 400) {
+            onClose();
+          }
+        }}
         className="relative bg-zinc-950 rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden border-t border-zinc-800"
       >
         {/* Header drag-handle / back button */}
@@ -266,7 +274,10 @@ export function MovieInfoPanel({
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-5 pb-8">
+        <div
+          className="overflow-y-auto flex-1 px-5 pb-8"
+          onPointerDownCapture={(e) => e.stopPropagation()}
+        >
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />

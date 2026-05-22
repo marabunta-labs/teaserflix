@@ -355,7 +355,7 @@ interface TrailerCardProps {
   onInfo: () => void;
   onNoTrailer: (movieId: number) => void;
   onShareCopied: () => void;
-  onExposeControls: (controls: { seek: (delta: number) => void; togglePlay: () => void }) => void;
+  onExposeControls: (controls: { seek: (delta: number) => void; togglePlay: () => void; forcePlay: () => void }) => void;
 }
 
 function TrailerCard({
@@ -491,6 +491,13 @@ function TrailerCard({
             return next;
           });
         },
+        // Called synchronously within a user-gesture handler to unlock iOS Low Power Mode autoplay
+        forcePlay: () => {
+          setIsPlaying(true);
+          if (playerRef.current) {
+            try { (playerRef.current as any).play?.(); } catch (_) {}
+          }
+        },
       });
       isFullWatchRef.current = false;
       const t = setTimeout(() => setIsPlaying(true), 250);
@@ -552,6 +559,10 @@ function TrailerCard({
 
     // Center zone: single tap = play/pause, double tap = like
     if (tapCountRef.current === 1) {
+      // Synchronous tiny seek so iOS registers this tap as a user gesture and unlocks autoplay
+      if (!isPlayingRef.current && playerRef.current) {
+        try { (playerRef.current as any).currentTime = currentTimeRef.current + 0.001; } catch (_) {}
+      }
       tapTimerRef.current = setTimeout(() => {
         tapCountRef.current = 0;
         setIsPlaying((prev) => {
@@ -759,6 +770,11 @@ function TrailerCard({
               <span className="text-white text-xs font-bold">10&Prime;</span>
             </div>
           </div>
+          <div className="absolute inset-y-0 left-1/3 right-1/3 z-10 flex items-center justify-center pointer-events-none">
+            <div className="bg-black/50 rounded-full p-5 opacity-40">
+              <Play size={48} className="text-white fill-white" />
+            </div>
+          </div>
           <div className="absolute inset-y-0 right-0 w-1/3 z-10 flex items-center justify-center pointer-events-none">
             <div className="bg-black/50 rounded-full px-4 py-3 flex flex-col items-center gap-1 opacity-40">
               <div className="flex">
@@ -815,10 +831,18 @@ function TrailerCard({
         className="absolute bottom-24 left-4 right-20 z-20 cursor-pointer active:opacity-80"
         onClick={(e) => { e.stopPropagation(); onInfo(); }}
       >
-        <h2 className="text-3xl font-bold text-white uppercase tracking-wider mb-1 drop-shadow-xl">
+        <h2
+          className="text-3xl font-bold text-white uppercase tracking-wider mb-1"
+          style={{ textShadow: "0 2px 12px rgba(0,0,0,0.95), 0 1px 4px rgba(0,0,0,1)" }}
+        >
           {movie.title}
         </h2>
-        <p className="text-gray-200 text-sm line-clamp-2 drop-shadow-lg">{movie.overview}</p>
+        <p
+          className="text-gray-200 text-sm line-clamp-2"
+          style={{ textShadow: "0 1px 8px rgba(0,0,0,0.95), 0 1px 3px rgba(0,0,0,1)" }}
+        >
+          {movie.overview}
+        </p>
       </div>
 
       <div className="absolute bottom-24 right-4 flex flex-col gap-5 items-center z-30">
@@ -1333,11 +1357,23 @@ export default function TeaserflixFeed() {
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // Desktop keyboard navigation
-  const activeCardControlsRef = useRef<{ seek: (delta: number) => void; togglePlay: () => void } | null>(null);
-  const handleExposeControls = useCallback((controls: { seek: (delta: number) => void; togglePlay: () => void }) => {
+  // Desktop keyboard navigation + iOS autoplay unlock
+  const activeCardControlsRef = useRef<{ seek: (delta: number) => void; togglePlay: () => void; forcePlay: () => void } | null>(null);
+  const handleExposeControls = useCallback((controls: { seek: (delta: number) => void; togglePlay: () => void; forcePlay: () => void }) => {
     activeCardControlsRef.current = controls;
   }, []);
+
+  // iOS Low Power Mode: the first touch anywhere on the page (including a swipe gesture)
+  // triggers play() synchronously inside the user-gesture context, which permanently
+  // unlocks autoplay for the session so subsequent cards play without user interaction.
+  useEffect(() => {
+    const unlock = () => {
+      activeCardControlsRef.current?.forcePlay?.();
+      document.removeEventListener('touchstart', unlock, true);
+    };
+    document.addEventListener('touchstart', unlock, { capture: true, passive: true });
+    return () => document.removeEventListener('touchstart', unlock, true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
