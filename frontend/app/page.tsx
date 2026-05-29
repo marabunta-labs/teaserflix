@@ -396,8 +396,6 @@ function TrailerCard({
   activeIndexRef.current = activeIndex;
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
-  const isActuallyPlayingRef = useRef(isActuallyPlaying);
-  isActuallyPlayingRef.current = isActuallyPlaying;
   const isPlayerReadyRef = useRef(isPlayerReady);
   isPlayerReadyRef.current = isPlayerReady;
 
@@ -569,25 +567,22 @@ function TrailerCard({
 
     // Center zone: single tap = play/pause, double tap = like
     if (tapCountRef.current === 1) {
-      // Use YouTube's actual player state — NOT React state — to determine direction.
-      // YT.PlayerState: -1=UNSTARTED, 0=ENDED, 1=PLAYING, 2=PAUSED, 3=BUFFERING
-      // iOS Low Power Mode blocks autoplay but leaves the player in BUFFERING (3),
-      // which our React state (isActuallyPlaying) incorrectly treats as "playing".
-      // Only state 1 (PLAYING) means the video is actually outputting frames.
+      // Use YouTube's actual player state to determine direction.
+      // getPlayerState() === 1 (PLAYING) is the only state where the video is
+      // truly outputting frames. BUFFERING (3) looks like playing in React state
+      // but iOS Low Power Mode can block the video there — we must treat it as paused.
       const ytApi = (playerRef.current as any)?.api;
       const wasPlaying = (ytApi?.getPlayerState?.() ?? -1) === 1;
 
       if (!wasPlaying) {
-        // ── PLAY ──────────────────────────────────────────────────────────────
-        // Immediate: reset tap counter now (no double-tap-to-like when paused)
-        // and show indicator right away so the user sees feedback instantly
-        // (prevents impatient 2nd tap within 250ms → accidental like).
+        // PLAY: reset tap counter immediately (no double-tap-to-like when paused)
+        // and show indicator right away so the user sees instant feedback.
         clearTimeout(tapTimerRef.current!);
         tapCountRef.current = 0;
         setIsPlaying(true);
         showPlayPauseIndicator("play");
-        // ytApi.playVideo() was already called by the button's onClick above
-        // (as the trusted iOS gesture). Call again here as belt-and-suspenders.
+        // The button's onClick already called ytApi.playVideo() as the trusted
+        // iOS gesture. Repeat here as fallback in case api wasn't ready then.
         if (playerRef.current) {
           if (isPlayerReadyRef.current && ytApi?.playVideo) {
             try { ytApi.playVideo(); } catch (_) {}
@@ -726,14 +721,12 @@ function TrailerCard({
         </div>
       )}
 
-      {/* iOS tap-interceptor: <button> is ALWAYS included in iOS Safari's
-          hit-test tree. A plain <div> with React onClick is NOT (React uses
-          event delegation — no native onclick on the element — so iOS skips it
-          and routes the tap directly into the YouTube iframe's document).
-          This button sits above the iframe (z-[5]), intercepts every tap, and
-          calls ytApi.playVideo() synchronously within the trusted-gesture stack
-          when the video is not playing. The click then bubbles to the card's
-          onClick={handleTap} for zone routing, pause, and double-tap-like. */}
+      {/* iOS tap-interceptor: <button> is always in iOS Safari's hit-test tree.
+          A plain <div> with React onClick is NOT — React uses event delegation
+          with no native onclick on the element, so iOS routes the tap directly
+          into the YouTube iframe. This button intercepts every tap first, calls
+          ytApi.playVideo() synchronously (trusted iOS gesture) when the video
+          is not playing, then bubbles to the card's onClick={handleTap}. */}
       <button
         type="button"
         aria-hidden="true"
@@ -744,7 +737,6 @@ function TrailerCard({
           if ((ytApi?.getPlayerState?.() ?? -1) !== 1) {
             try { ytApi?.playVideo?.(); } catch (_) {}
           }
-          // No stopPropagation — click bubbles to card's onClick={handleTap}
         }}
       />
 

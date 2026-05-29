@@ -1,6 +1,5 @@
 // TMDB API abstraction layer
-const BASE = "https://api.themoviedb.org/3";
-const KEY = () => process.env.NEXT_PUBLIC_TMDB_API_KEY ?? "";
+const BASE = "/api/tmdb";
 
 // Language used for all TMDB requests — call setTmdbLanguage() when locale changes
 let _tmdbLang = "es-ES";
@@ -70,7 +69,7 @@ export interface TMDBPersonDetails {
 
 async function tmdbFetch(path: string): Promise<any> {
   const sep = path.includes("?") ? "&" : "?";
-  const url = `${BASE}${path}${sep}api_key=${KEY()}&language=${_tmdbLang}`;
+  const url = `${BASE}${path}${sep}language=${_tmdbLang}`;
   const res = await fetch(url);
   if (!res.ok) {
     console.error(`[TMDB] ${res.status} ${res.statusText} — ${path}`);

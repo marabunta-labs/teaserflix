@@ -54,11 +54,11 @@ cp .env.example .env.local
 
 | Variable | Where to get it |
 |---|---|
-| `NEXT_PUBLIC_TMDB_API_KEY` | TMDB dashboard → **API Read Access Token** (the long JWT, not the short API Key) |
+| `TMDB_API_KEY` | TMDB dashboard → **API** → **API Key** (the short alphanumeric key) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project → Settings → API → Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase project → Settings → API → `anon` public key |
 
-> **Note on TMDB auth:** TeaserFlix uses Bearer token authentication (`Authorization: Bearer <token>`). Use the **Read Access Token** (the long `eyJ…` JWT), not the short API Key.
+> **Note on TMDB key security:** `TMDB_API_KEY` has **no** `NEXT_PUBLIC_` prefix — it is never included in the client bundle. All TMDB requests go through the Next.js API route at `app/api/tmdb/[...path]/route.ts`, which adds the key server-side before forwarding to `api.themoviedb.org`.
 
 ---
 
@@ -185,7 +185,7 @@ All UI strings live in `lib/i18n.tsx`. The `en` object is the source of truth; `
 Create this file as `.env.example` at the root of `frontend/`:
 
 ```env
-NEXT_PUBLIC_TMDB_API_KEY=eyJhbGciOiJIUzI1NiJ9...   # TMDB Read Access Token
+TMDB_API_KEY=5c955860eb42e18c047a176a83e2b3a1  # Server-only — never exposed to the client
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
