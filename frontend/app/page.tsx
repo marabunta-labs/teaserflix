@@ -396,6 +396,10 @@ function TrailerCard({
   activeIndexRef.current = activeIndex;
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
+  const isActuallyPlayingRef = useRef(isActuallyPlaying);
+  isActuallyPlayingRef.current = isActuallyPlaying;
+  const isPlayerReadyRef = useRef(isPlayerReady);
+  isPlayerReadyRef.current = isPlayerReady;
 
   const enterTimeRef = useRef<number>(0);
   const isFullWatchRef = useRef(false);
@@ -495,7 +499,13 @@ function TrailerCard({
         forcePlay: () => {
           setIsPlaying(true);
           if (playerRef.current) {
-            try { (playerRef.current as any).play?.(); } catch (_) {}
+            const ytApi = (playerRef.current as any).api;
+            if (isPlayerReadyRef.current && ytApi?.playVideo) {
+              try { ytApi.playVideo(); } catch (_) {}
+            } else {
+              playerRef.current.currentTime = currentTimeRef.current + 0.001;
+              try { playerRef.current.play(); } catch (_) {}
+            }
           }
         },
       });
@@ -559,18 +569,42 @@ function TrailerCard({
 
     // Center zone: single tap = play/pause, double tap = like
     if (tapCountRef.current === 1) {
-      // Synchronous tiny seek so iOS registers this tap as a user gesture and unlocks autoplay
-      if (!isPlayingRef.current && playerRef.current) {
-        try { (playerRef.current as any).currentTime = currentTimeRef.current + 0.001; } catch (_) {}
-      }
-      tapTimerRef.current = setTimeout(() => {
+      // Use YouTube's actual player state — NOT React state — to determine direction.
+      // YT.PlayerState: -1=UNSTARTED, 0=ENDED, 1=PLAYING, 2=PAUSED, 3=BUFFERING
+      // iOS Low Power Mode blocks autoplay but leaves the player in BUFFERING (3),
+      // which our React state (isActuallyPlaying) incorrectly treats as "playing".
+      // Only state 1 (PLAYING) means the video is actually outputting frames.
+      const ytApi = (playerRef.current as any)?.api;
+      const wasPlaying = (ytApi?.getPlayerState?.() ?? -1) === 1;
+
+      if (!wasPlaying) {
+        // ── PLAY ──────────────────────────────────────────────────────────────
+        // Immediate: reset tap counter now (no double-tap-to-like when paused)
+        // and show indicator right away so the user sees feedback instantly
+        // (prevents impatient 2nd tap within 250ms → accidental like).
+        clearTimeout(tapTimerRef.current!);
         tapCountRef.current = 0;
-        setIsPlaying((prev) => {
-          const next = !prev;
-          showPlayPauseIndicator(next ? "play" : "pause");
-          return next;
-        });
-      }, 250);
+        setIsPlaying(true);
+        showPlayPauseIndicator("play");
+        // ytApi.playVideo() was already called by the button's onClick above
+        // (as the trusted iOS gesture). Call again here as belt-and-suspenders.
+        if (playerRef.current) {
+          if (isPlayerReadyRef.current && ytApi?.playVideo) {
+            try { ytApi.playVideo(); } catch (_) {}
+          } else {
+            playerRef.current.currentTime = currentTimeRef.current + 0.001;
+            try { playerRef.current.play(); } catch (_) {}
+          }
+        }
+      } else {
+        // ── PAUSE ─────────────────────────────────────────────────────────────
+        // Wait 250 ms so a double-tap registers as "like" instead of pause.
+        tapTimerRef.current = setTimeout(() => {
+          tapCountRef.current = 0;
+          setIsPlaying(false);
+          showPlayPauseIndicator("pause");
+        }, 250);
+      }
     } else if (tapCountRef.current === 2) {
       if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
       tapCountRef.current = 0;
@@ -691,6 +725,28 @@ function TrailerCard({
           />
         </div>
       )}
+
+      {/* iOS tap-interceptor: <button> is ALWAYS included in iOS Safari's
+          hit-test tree. A plain <div> with React onClick is NOT (React uses
+          event delegation — no native onclick on the element — so iOS skips it
+          and routes the tap directly into the YouTube iframe's document).
+          This button sits above the iframe (z-[5]), intercepts every tap, and
+          calls ytApi.playVideo() synchronously within the trusted-gesture stack
+          when the video is not playing. The click then bubbles to the card's
+          onClick={handleTap} for zone routing, pause, and double-tap-like. */}
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        className="absolute inset-0 z-[5] cursor-default bg-transparent border-0 p-0 m-0"
+        onClick={() => {
+          const ytApi = (playerRef.current as any)?.api;
+          if ((ytApi?.getPlayerState?.() ?? -1) !== 1) {
+            try { ytApi?.playVideo?.(); } catch (_) {}
+          }
+          // No stopPropagation — click bubbles to card's onClick={handleTap}
+        }}
+      />
 
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black/90 pointer-events-none z-10" />
 
@@ -1181,6 +1237,18 @@ export default function TeaserflixFeed() {
     loadInitialMovies();
   }, [authChecked, activeGenres, activePlatforms, filterNoTrailer]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Manual reload (e.g. tapping the logo)
+  const reloadFeed = useCallback(() => {
+    popularPageRef.current = 1;
+    discoverPageRef.current = 1;
+    trendingPageRef.current = 1;
+    isFetchingRef.current = false;
+    setMovies([]);
+    setActiveIndex(0);
+    window.scrollTo({ top: 0 });
+    loadInitialMovies();
+  }, [loadInitialMovies]);
+
   // When locale changes, update only titles + overviews of the current feed movies
   useEffect(() => {
     if (!isLocaleInitRef.current) { isLocaleInitRef.current = true; return; }
@@ -1420,9 +1488,13 @@ export default function TeaserflixFeed() {
     <main className="w-full bg-black overflow-y-scroll snap-y snap-mandatory no-scrollbar relative" style={{ height: 'var(--app-height, 100dvh)' }}>
       {/* Top bar */}
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pb-2 pointer-events-none" style={{ paddingTop: 'max(2rem, env(safe-area-inset-top))' }}>
-        <span className="text-white font-black uppercase tracking-tighter text-xl pointer-events-none">
+        <button
+          onClick={reloadFeed}
+          className="text-white font-black uppercase tracking-tighter text-xl pointer-events-auto active:scale-95 transition"
+          style={{ textShadow: "0 2px 8px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,1)" }}
+        >
           Teaser<span className="text-red-600">flix</span>
-        </span>
+        </button>
         <div className="flex items-center gap-1.5 pointer-events-auto">
           {/* Language switcher */}
           <button
