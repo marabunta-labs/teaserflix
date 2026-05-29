@@ -51,15 +51,11 @@ export class Recommender {
         if (raw) {
           const ids: number[] = JSON.parse(raw);
           ids.forEach((id) => this.seenIds.add(id));
-          console.log(`[Recommender] Restored ${ids.length} guest seen-IDs from localStorage`);
         }
       } catch {
         // ignore corrupt data
       }
     }
-    console.log(
-      `[Recommender] Init userId=${userId ?? "guest"} seedGenres=[${initialGenres.join(",")}]`,
-    );
   }
 
   // ─── In-memory tracking ────────────────────────────────────
@@ -95,12 +91,6 @@ export class Recommender {
       this.genreScores[gid] = (this.genreScores[gid] ?? 0) + delta;
     }
     this.seenIds.add(data.movie_id);
-    console.log(
-      `[Recommender] movie=${data.movie_id} genres=[${data.genre_ids}] ` +
-        `watchTime=${data.watch_time.toFixed(1)}s fastScroll=${data.is_fast_scroll} ` +
-        `fullWatch=${data.is_full_watch} interested=${data.is_interested} ` +
-        `scoreDelta=${delta} | topGenres=[${this.getTopGenres(5).join(",")}]`,
-    );
   }
 
   /**
@@ -136,8 +126,6 @@ export class Recommender {
     });
     if (error) {
       console.error("[Recommender] Failed to persist interaction:", error.message);
-    } else {
-      console.log(`[Recommender] Persisted interaction for movie ${data.movie_id}`);
     }
   }
 
@@ -172,9 +160,5 @@ export class Recommender {
         this.genreScores[gid] = (this.genreScores[gid] ?? 0) + delta;
       }
     }
-    console.log(
-      `[Recommender] Loaded history: ${data?.length ?? 0} interactions, ` +
-        `${this.seenIds.size} seen movies, topGenres=[${this.getTopGenres(5).join(",")}]`,
-    );
   }
 }

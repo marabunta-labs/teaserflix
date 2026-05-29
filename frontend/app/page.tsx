@@ -54,6 +54,18 @@ function formatTime(s: number): string {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 }
 
+/** Fallback clipboard copy for browsers without navigator.clipboard (HTTP, older browsers) */
+function fallbackCopyText(text: string): void {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try { document.execCommand("copy"); } catch { /* ignore */ }
+  document.body.removeChild(textarea);
+}
+
 // ─── Auth Prompt ──────────────────────────────────────────────
 function AuthPromptOverlay({ onLogin, onGuest }: { onLogin: () => void; onGuest: () => void }) {
   const { t } = useTranslation();
@@ -103,18 +115,28 @@ function SearchModal({
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    if (!query.trim()) { setResults([]); return; }
-    const t = setTimeout(async () => {
+    if (!query.trim()) {
+      // Defer state resets to avoid synchronous setState in effect body
+      const id = requestAnimationFrame(() => { setResults([]); setSearching(false); });
+      return () => cancelAnimationFrame(id);
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
       setSearching(true);
       const r = await searchMovies(query);
-      setResults(r);
-      setSearching(false);
+      if (!cancelled) {
+        setResults(r);
+        setSearching(false);
+      }
     }, 380);
-    return () => clearTimeout(t);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [query]);
 
   useEffect(() => {
-    if (!isOpen) { setQuery(""); setResults([]); }
+    if (!isOpen) {
+      const id = requestAnimationFrame(() => { setQuery(""); setResults([]); });
+      return () => cancelAnimationFrame(id);
+    }
   }, [isOpen]);
 
   return (
@@ -154,7 +176,7 @@ function SearchModal({
               </div>
             ) : results.length > 0 ? (
               <div className="grid grid-cols-3 gap-2 p-4">
-                {results.map((movie) => (
+                {results.filter((m) => m.poster_path).map((movie) => (
                   <button
                     key={movie.id}
                     onClick={() => { onSelectMovie(movie); onClose(); }}
@@ -164,6 +186,7 @@ function SearchModal({
                       src={`https://image.tmdb.org/t/p/w185${movie.poster_path}`}
                       alt={movie.title}
                       className="w-full aspect-[2/3] object-cover"
+                      loading="lazy"
                     />
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2">
                       <p className="text-white text-[10px] font-semibold line-clamp-2 leading-tight">
@@ -189,7 +212,7 @@ function SearchModal({
 // Small helpers so SearchModal can use i18n via hooks (hooks can't be called conditionally)
 function SearchNoResults({ query }: { query: string }) {
   const { t } = useTranslation();
-  return <p className="text-center text-zinc-600 py-12 text-sm">{t.search.noResultsPrefix} "{query}"</p>;
+  return <p className="text-center text-zinc-600 py-12 text-sm">{t.search.noResultsPrefix} &ldquo;{query}&rdquo;</p>;
 }
 function SearchHint() {
   const { t } = useTranslation();
@@ -217,11 +240,15 @@ function FilterPanel({
   const [localPlatforms, setLocalPlatforms] = useState(activePlatforms);
   const [localFilter, setLocalFilter] = useState(filterNoTrailer);
 
+  // Sync local state when panel opens — use rAF to satisfy React 19 lint rule
   useEffect(() => {
     if (isOpen) {
-      setLocalGenres(activeGenres);
-      setLocalPlatforms(activePlatforms);
-      setLocalFilter(filterNoTrailer);
+      const id = requestAnimationFrame(() => {
+        setLocalGenres(activeGenres);
+        setLocalPlatforms(activePlatforms);
+        setLocalFilter(filterNoTrailer);
+      });
+      return () => cancelAnimationFrame(id);
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -391,13 +418,15 @@ function TrailerCard({
   const [showSeekIndicator, setShowSeekIndicator] = useState<"back" | "forward" | null>(null);
 
   const { ref, inView } = useInView({ threshold: 0.5 });
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const activeIndexRef = useRef(activeIndex);
-  activeIndexRef.current = activeIndex;
   const isPlayingRef = useRef(isPlaying);
-  isPlayingRef.current = isPlaying;
   const isPlayerReadyRef = useRef(isPlayerReady);
-  isPlayerReadyRef.current = isPlayerReady;
+
+  // Keep refs in sync with latest values (needed for event handlers that close over stale state)
+  useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { isPlayerReadyRef.current = isPlayerReady; }, [isPlayerReady]);
 
   const enterTimeRef = useRef<number>(0);
   const isFullWatchRef = useRef(false);
@@ -444,10 +473,8 @@ function TrailerCard({
         if (key) {
           setTrailerKey(key);
           setTrailerStatus("found");
-          console.log(`[TeaserFlix] Card ${myIndex} (${movie.title}) trailer → ${key}`);
         } else {
           setTrailerStatus("not_found");
-          console.warn(`[TeaserFlix] Card ${myIndex} (${movie.title}) NO trailer`);
         }
       })
       .catch(() => setTrailerStatus("not_found"));
@@ -466,7 +493,6 @@ function TrailerCard({
       enterTimeRef.current = Date.now();
       const timeSinceLeave = leaveTimeRef.current === 0 ? 0 : Date.now() - leaveTimeRef.current;
       const distanceFromActive = Math.abs(activeIndexRef.current - myIndex);
-      console.log(`[TeaserFlix] Card ${myIndex} (${movie.title}) ENTERED | away=${timeSinceLeave}ms dist=${distanceFromActive}`);
 
       const shouldReset = timeSinceLeave > 5000 || distanceFromActive > 2;
       if (shouldReset && isPlayerReady && playerRef.current) {
@@ -497,6 +523,7 @@ function TrailerCard({
         forcePlay: () => {
           setIsPlaying(true);
           if (playerRef.current) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const ytApi = (playerRef.current as any).api;
             if (isPlayerReadyRef.current && ytApi?.playVideo) {
               try { ytApi.playVideo(); } catch (_) {}
@@ -609,7 +636,7 @@ function TrailerCard({
   }, [isLiked, onToggleLike, showPlayPauseIndicator, duration]);
 
   const handlePressStart = (e: React.TouchEvent | React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest("button, [data-progress-bar]")) return;
+    if ((e.target as HTMLElement).closest("[data-progress-bar]")) return;
     wasLongPressRef.current = false;
     if ("touches" in e && e.touches.length > 0) {
       swipeTouchStartXRef.current = e.touches[0].clientX;
@@ -619,6 +646,7 @@ function TrailerCard({
       tapXRatioRef.current = (e as React.MouseEvent).clientX / window.innerWidth;
     }
     longPressTimerRef.current = setTimeout(() => {
+      if (!isPlayingRef.current) return; // don't activate x2 if video isn't playing yet
       wasLongPressRef.current = true;
       setPlaybackRate(2);
     }, 500);
@@ -647,20 +675,24 @@ function TrailerCard({
   };
 
   const handleProgressMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation(); setIsSeeking(true); isDraggingRef.current = true; seekToClientX(e.clientX);
+    e.stopPropagation();
+    setIsSeeking(true); isDraggingRef.current = true; seekToClientX(e.clientX);
   };
   const handleProgressMouseUp = (e: React.MouseEvent) => {
     if (!isDraggingRef.current) return;
     e.stopPropagation(); isDraggingRef.current = false; setIsSeeking(false);
   };
   const handleProgressTouchStart = (e: React.TouchEvent) => {
-    e.stopPropagation(); setIsSeeking(true); isDraggingRef.current = true; seekToClientX(e.touches[0].clientX);
+    e.stopPropagation();
+    setIsSeeking(true); isDraggingRef.current = true; seekToClientX(e.touches[0].clientX);
   };
   const handleProgressTouchMove = (e: React.TouchEvent) => {
     if (!isDraggingRef.current) return;
     e.stopPropagation(); e.preventDefault(); seekToClientX(e.touches[0].clientX);
   };
-  const handleProgressTouchEnd = () => { isDraggingRef.current = false; setIsSeeking(false); };
+  const handleProgressTouchEnd = () => {
+    isDraggingRef.current = false; setIsSeeking(false);
+  };
 
   const progressFraction = duration > 0 ? currentTime / duration : 0;
   const handleEnded = () => { isFullWatchRef.current = true; onEnded(); };
@@ -674,16 +706,16 @@ function TrailerCard({
       onMouseUp={handlePressEnd}
       onMouseLeave={handlePressEnd}
       onMouseMove={handleCardMouseMove}
-      onTouchStart={handlePressStart}
-      onTouchEnd={handleTouchEnd}
     >
-      <img
-        src={`https://image.tmdb.org/t/p/original${movie.poster_path}`}
-        alt={movie.title}
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 pointer-events-none z-0 ${
-          isActuallyPlaying ? "opacity-0" : "opacity-60"
-        }`}
-      />
+      {movie.poster_path && (
+        <img
+          src={`https://image.tmdb.org/t/p/original${movie.poster_path}`}
+          alt={movie.title}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 pointer-events-none z-0 ${
+            isActuallyPlaying ? "opacity-0" : "opacity-60"
+          }`}
+        />
+      )}
 
       {trailerKey && shouldRenderPlayer && (
         <div className="absolute inset-0 pointer-events-none scale-150 z-0">
@@ -692,7 +724,7 @@ function TrailerCard({
             src={`https://www.youtube.com/watch?v=${trailerKey}`}
             width="100%"
             height="100%"
-            playing={isPlaying && !isSeeking}
+            playing={isPlaying}
             muted={isGlobalMuted}
             playbackRate={playbackRate}
             onEnded={handleEnded}
@@ -732,7 +764,16 @@ function TrailerCard({
         aria-hidden="true"
         tabIndex={-1}
         className="absolute inset-0 z-[5] cursor-default bg-transparent border-0 p-0 m-0"
+        onTouchStart={(e) => {
+          e.stopPropagation();
+          handlePressStart(e as unknown as React.TouchEvent);
+        }}
+        onTouchEnd={(e) => {
+          e.stopPropagation();
+          handleTouchEnd(e as unknown as React.TouchEvent);
+        }}
         onClick={() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const ytApi = (playerRef.current as any)?.api;
           if ((ytApi?.getPlayerState?.() ?? -1) !== 1) {
             try { ytApi?.playVideo?.(); } catch (_) {}
@@ -910,8 +951,15 @@ function TrailerCard({
             const url = `${window.location.origin}/?play=${movie.id}`;
             if (navigator.share) {
               navigator.share({ title: movie.title, url }).catch(() => {});
+            } else if (navigator.clipboard?.writeText) {
+              navigator.clipboard.writeText(url).then(onShareCopied).catch(() => {
+                // Fallback for insecure contexts
+                fallbackCopyText(url);
+                onShareCopied();
+              });
             } else {
-              navigator.clipboard.writeText(url).then(onShareCopied).catch(() => {});
+              fallbackCopyText(url);
+              onShareCopied();
             }
           }}
           className="transition active:scale-90"
@@ -1004,7 +1052,7 @@ export default function TeaserflixFeed() {
   const { t, locale, setLocale } = useTranslation();
   // localeRef lets the reload effect always read the current locale without it being in the deps
   const localeRef = useRef(locale);
-  localeRef.current = locale;
+  useEffect(() => { localeRef.current = locale; }, [locale]);
   const isLocaleInitRef = useRef(false);
 
   // Detect ?play=ID URL param on mount (before auth) and store for later injection
@@ -1052,7 +1100,6 @@ export default function TeaserflixFeed() {
       if (!mounted) return;
 
       if (session) {
-        console.log(`[TeaserFlix] Session: ${session.user.email}`);
         setUser(session.user);
 
         const { data: profile } = await supabase
@@ -1065,7 +1112,6 @@ export default function TeaserflixFeed() {
         const prefProviders: number[] = profile?.preferred_providers ?? [];
 
         if (!profile?.has_completed_onboarding && prefGenres.length === 0) {
-          console.log("[TeaserFlix] New user → onboarding");
           router.push("/onboarding");
           return;
         }
@@ -1092,7 +1138,6 @@ export default function TeaserflixFeed() {
           setBookmarkedIds(new Set((wl ?? []).map((r: any) => r.movie_id)));
         }
       } else {
-        console.log("[TeaserFlix] Guest mode");
         recommenderRef.current = new Recommender(null, []);
         setShowAuthPrompt(true);
       }
@@ -1154,11 +1199,9 @@ export default function TeaserflixFeed() {
       const fresh = raw.filter((m) => !rec?.hasSeen(m.id) && !seenInBatch.has(m.id));
       fresh.forEach((m) => seenInBatch.add(m.id));
       accumulated = [...accumulated, ...fresh];
-      console.log(`[TeaserFlix] initBatch attempt=${attempts} fresh=${fresh.length} total=${accumulated.length}`);
     }
 
     if (accumulated.length === 0) {
-      console.warn("[TeaserFlix] All movies seen → re-surfacing popular");
       let raw = await fetchPopularMovies(1);
       if (filterNoTrailerRef.current && raw.length > 0) {
         const withTrailers = await checkMoviesHaveTrailers(raw.map((m) => m.id));
@@ -1170,7 +1213,6 @@ export default function TeaserflixFeed() {
 
     accumulated.forEach((m) => rec?.markSeen(m.id));
     setMovies(accumulated);
-    console.log(`[TeaserFlix] Initial batch: ${accumulated.length} movies`);
   }, [fetchBatch]);
 
   // Load more
@@ -1190,7 +1232,6 @@ export default function TeaserflixFeed() {
           const ids = new Set(prev.map((m) => m.id));
           return [...prev, ...fresh.filter((m) => !ids.has(m.id))];
         });
-        console.log(`[TeaserFlix] Loaded ${fresh.length} more`);
       } else {
         let fallback = (await fetchPopularMovies(popularPageRef.current++)).filter(
           (m) => !rec?.hasSeen(m.id) && !existingIds.has(m.id),
@@ -1293,7 +1334,7 @@ export default function TeaserflixFeed() {
         } else {
           next.add(movieId);
           if (user) {
-            supabase.from("likes").insert({ user_id: user.id, movie_id: movieId }).then(() => {});
+            supabase.from("likes").upsert({ user_id: user.id, movie_id: movieId }, { onConflict: "user_id,movie_id" }).then(() => {});
             supabase.from("interactions").update({ is_interested: true }).eq("user_id", user.id).eq("movie_id", movieId).then(() => {});
           }
           recommenderRef.current?.recordInteraction({ movie_id: movieId, genre_ids: genreIds, watch_time: 0, is_fast_scroll: false, is_full_watch: false, is_interested: true });
@@ -1317,14 +1358,14 @@ export default function TeaserflixFeed() {
             return prev;
           }
           next.add(movieId);
-          supabase.from("watchlist").insert({ user_id: user.id, movie_id: movieId }).then(() => {});
+          supabase.from("watchlist").upsert({ user_id: user.id, movie_id: movieId }, { onConflict: "user_id,movie_id" }).then(() => {});
           supabase.from("interactions").update({ is_interested: true }).eq("user_id", user.id).eq("movie_id", movieId).then(() => {});
           recommenderRef.current?.recordInteraction({ movie_id: movieId, genre_ids: genreIds, watch_time: 0, is_fast_scroll: false, is_full_watch: false, is_interested: true });
         }
         return next;
       });
     },
-    [user, showToast],
+    [user, showToast, t.feed.toastSave],
   );
 
   // Inject a searched movie into the feed (after current position) and scroll to it

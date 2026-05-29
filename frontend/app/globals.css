@@ -5,3 +5,30 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
+/* Cross-browser: ensure backdrop-filter works and has fallback */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .backdrop-blur-lg,
+  .backdrop-blur-md,
+  .backdrop-blur-sm {
+    background-color: rgba(0, 0, 0, 0.85) !important;
+  }
+}
+
+/* Ensure smooth scrolling on iOS and all browsers */
+html {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Fix tap highlight on mobile browsers */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fix iOS input zoom on focus */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

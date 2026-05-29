@@ -70,12 +70,15 @@ export interface TMDBPersonDetails {
 async function tmdbFetch(path: string): Promise<any> {
   const sep = path.includes("?") ? "&" : "?";
   const url = `${BASE}${path}${sep}language=${_tmdbLang}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    console.error(`[TMDB] ${res.status} ${res.statusText} — ${path}`);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      return {};
+    }
+    return await res.json();
+  } catch {
     return {};
   }
-  return res.json();
 }
 
 /** Filter out adult movies and those without a poster */
@@ -86,13 +89,11 @@ function filterSafe(movies: any[]): TMDBMovie[] {
 // ─── Feed fetchers ────────────────────────────────────────────────────────────
 
 export async function fetchPopularMovies(page = 1): Promise<TMDBMovie[]> {
-  console.log(`[TMDB] fetchPopular page=${page}`);
   const data = await tmdbFetch(`/movie/popular?page=${page}`);
   return filterSafe(data.results);
 }
 
 export async function fetchTrendingMovies(page = 1): Promise<TMDBMovie[]> {
-  console.log(`[TMDB] fetchTrending page=${page}`);
   const data = await tmdbFetch(`/trending/movie/week?page=${page}`);
   return filterSafe(data.results);
 }
@@ -123,7 +124,6 @@ export async function fetchDiscoverWithFilters(
     p.watch_region = region;
   }
   const qs = new URLSearchParams(p).toString();
-  console.log(`[TMDB] discover genres=[${genreIds}] providers=[${providerIds}] page=${page}`);
   const data = await tmdbFetch(`/discover/movie?${qs}`);
   return filterSafe(data.results);
 }
@@ -169,7 +169,6 @@ export async function searchMovies(
   page = 1,
 ): Promise<TMDBMovie[]> {
   if (!query.trim()) return [];
-  console.log(`[TMDB] search "${query}" page=${page}`);
   const data = await tmdbFetch(
     `/search/movie?query=${encodeURIComponent(query)}&page=${page}&include_adult=false`,
   );
@@ -242,12 +241,17 @@ export async function checkMoviesHaveTrailers(
 ): Promise<Set<number>> {
   const unchecked = movieIds.filter((id) => !_trailerCache.has(id));
   if (unchecked.length > 0) {
-    await Promise.allSettled(
-      unchecked.map(async (id) => {
-        const key = await fetchMovieTrailerKey(id);
-        _trailerCache.set(id, !!key);
-      }),
-    );
+    // Process in batches of 5 to avoid overwhelming the API
+    const BATCH = 5;
+    for (let i = 0; i < unchecked.length; i += BATCH) {
+      const batch = unchecked.slice(i, i + BATCH);
+      await Promise.allSettled(
+        batch.map(async (id) => {
+          const key = await fetchMovieTrailerKey(id);
+          _trailerCache.set(id, !!key);
+        }),
+      );
+    }
   }
   const result = new Set<number>();
   for (const id of movieIds) {

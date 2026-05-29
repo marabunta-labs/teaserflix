@@ -28,11 +28,14 @@ function ActorPanel({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
     fetchPersonDetails(personId).then((p) => {
-      setPerson(p);
-      setLoading(false);
+      if (!cancelled) {
+        setPerson(p);
+        setLoading(false);
+      }
     });
+    return () => { cancelled = true; };
   }, [personId]);
 
   return (
@@ -186,23 +189,26 @@ export function MovieInfoPanel({
   const [showGuestPrompt, setShowGuestPrompt] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     setDetails(null);
-    setLoading(true);
     setHasTrailer(null);
     setShowGuestPrompt(false);
     Promise.all([
       fetchMovieDetails(movieId),
       fetchMovieTrailerKey(movieId),
     ]).then(([d, key]) => {
+      if (cancelled) return;
       setDetails(d);
       setHasTrailer(key !== null);
       setLoading(false);
     });
+    return () => { cancelled = true; };
   }, [movieId]);
 
   const navigateTo = (id: number) => {
     setHistory((prev) => [...prev, movieId]);
     setMovieId(id);
+    setLoading(true);
     setActorId(null);
     setShowGuestPrompt(false);
   };
@@ -211,6 +217,7 @@ export function MovieInfoPanel({
     const prev = history[history.length - 1];
     if (prev !== undefined) {
       setMovieId(prev);
+      setLoading(true);
       setHistory((h) => h.slice(0, -1));
     } else {
       onClose();

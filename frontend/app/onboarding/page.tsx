@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,7 +23,19 @@ export default function OnboardingPage() {
   const [selectedGenres, setSelectedGenres] = useState<number[]>([]);
   const [selectedPlatforms, setSelectedPlatforms] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const router = useRouter();
+
+  // Guard: redirect to login if not authenticated
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.replace("/login");
+      } else {
+        setAuthChecked(true);
+      }
+    });
+  }, [router]);
 
   const toggleGenre = (id: number) =>
     setSelectedGenres((prev) =>
@@ -62,6 +74,14 @@ export default function OnboardingPage() {
   };
 
   const remaining = Math.max(0, 3 - selectedGenres.length);
+
+  if (!authChecked) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-black">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white p-6 flex flex-col items-center justify-center">

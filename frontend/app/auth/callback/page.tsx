@@ -20,13 +20,11 @@ function AuthCallbackInner() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === "PASSWORD_RECOVERY") {
-          console.log("[AuthCallback] PASSWORD_RECOVERY → /reset-password");
           subscription.unsubscribe();
           router.replace("/reset-password");
           return;
         }
         if (event === "SIGNED_IN" && session) {
-          console.log("[AuthCallback] SIGNED_IN → redirecting to", next);
           subscription.unsubscribe();
           router.replace(next);
         }
@@ -36,14 +34,13 @@ function AuthCallbackInner() {
     // In case the session is already available (PKCE code already exchanged)
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
-        console.log("[AuthCallback] Session already active → redirecting to", next);
         subscription.unsubscribe();
         router.replace(next);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [router, searchParams]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-black">
