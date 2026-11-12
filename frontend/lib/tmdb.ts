@@ -128,6 +128,28 @@ export async function fetchDiscoverWithFilters(
   return filterSafe(data.results);
 }
 
+/**
+ * Raw discover call with arbitrary TMDB params.
+ * `ok` is false when the request itself failed (as opposed to zero results).
+ */
+export async function fetchDiscoverRaw(
+  params: Record<string, string>,
+): Promise<{ results: TMDBMovie[]; total: number; ok: boolean }> {
+  const qs = new URLSearchParams({ include_adult: "false", ...params }).toString();
+  const data = await tmdbFetch(`/discover/movie?${qs}`);
+  return {
+    results: filterSafe(data.results),
+    total: data.total_results ?? 0,
+    ok: Array.isArray(data.results),
+  };
+}
+
+/** "More like this": TMDB's recommendations for a movie the user enjoyed */
+export async function fetchMovieRecommendations(movieId: number): Promise<TMDBMovie[]> {
+  const data = await tmdbFetch(`/movie/${movieId}/recommendations?page=1`);
+  return filterSafe(data.results);
+}
+
 /** Convenience wrapper for genre-only discovery */
 export async function fetchDiscoverByGenres(
   genreIds: number[],

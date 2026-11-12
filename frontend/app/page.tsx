@@ -29,6 +29,8 @@ import {
   fetchPopularMovies,
   fetchTrendingMovies,
   fetchDiscoverWithFilters,
+  fetchDiscoverRaw,
+  fetchMovieRecommendations,
   fetchMovieDetails,
   fetchMovieTrailerKey,
   fetchMovieTitles,
@@ -1015,6 +1017,13 @@ export default function TeaserflixFeed() {
   // Per-movie state
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<number>>(new Set());
+  // Refs so handleInteraction can tell whether a card was liked/saved while it was on screen
+  const likedIdsRef = useRef(likedIds);
+  const bookmarkedIdsRef = useRef(bookmarkedIds);
+  useEffect(() => {
+    likedIdsRef.current = likedIds;
+    bookmarkedIdsRef.current = bookmarkedIds;
+  }, [likedIds, bookmarkedIds]);
 
   // UI overlays
   const [infoMovieId, setInfoMovieId] = useState<number | null>(null);
@@ -1161,15 +1170,45 @@ export default function TeaserflixFeed() {
     const hasFilters = genres.length > 0 || providers.length > 0;
     const hasSignal = rec?.hasEnoughSignal() ?? false;
     const topGenres = rec?.getTopGenres(5) ?? [];
+    const avoidedGenres = rec?.getAvoidedGenres() ?? [];
+    const seeds = rec?.getSeedMovieIds(10) ?? [];
+
+    // Personalised feed: mostly "more like what you loved" + genres you engage
+    // with, never genres you keep scrolling past; a little exploration.
+    const discoverForTaste = async () => {
+      // Alternate between a single favourite genre and a pair, for variety
+      const pool = topGenres.slice(0, 3);
+      const pick = pool.length > 1 && Math.random() < 0.5
+        ? [pool[Math.floor(Math.random() * 2)], pool[2] ?? pool[1]].filter((g, i, a) => a.indexOf(g) === i)
+        : [pool[Math.floor(Math.random() * pool.length)]];
+      const { results } = await fetchDiscoverRaw({
+        sort_by: "popularity.desc",
+        "vote_count.gte": "100",
+        "vote_average.gte": "6",
+        with_genres: pick.join(","),
+        ...(avoidedGenres.length > 0 ? { without_genres: avoidedGenres.join(",") } : {}),
+        page: String(discoverPageRef.current++),
+      });
+      return results;
+    };
 
     let raw: TMDBMovie[];
     if (hasFilters) {
       raw = await fetchDiscoverWithFilters(genres, providers, discoverPageRef.current++);
     } else if (hasSignal) {
       const roll = Math.random();
-      if (roll < 0.70) raw = await fetchDiscoverWithFilters(topGenres, [], discoverPageRef.current++);
-      else if (roll < 0.90) raw = await fetchTrendingMovies(trendingPageRef.current++);
-      else raw = await fetchPopularMovies(popularPageRef.current++);
+      if (seeds.length > 0 && roll < 0.45) {
+        raw = await fetchMovieRecommendations(seeds[Math.floor(Math.random() * seeds.length)]);
+      } else if (topGenres.length > 0 && roll < 0.85) {
+        raw = await discoverForTaste();
+      } else if (roll < 0.93) {
+        raw = await fetchTrendingMovies(trendingPageRef.current++);
+      } else {
+        raw = await fetchPopularMovies(popularPageRef.current++);
+      }
+      if (avoidedGenres.length > 0) {
+        raw = raw.filter((m) => !m.genre_ids.some((g) => avoidedGenres.includes(g)));
+      }
     } else {
       raw = Math.random() < 0.6
         ? await fetchPopularMovies(popularPageRef.current++)
@@ -1282,6 +1321,21 @@ export default function TeaserflixFeed() {
     loadInitialMovies();
   }, [loadInitialMovies]);
 
+  // Secret menu: tapping the logo 7 times in quick succession opens /secret
+  const logoTapsRef = useRef({ count: 0, last: 0 });
+  const handleLogoTap = useCallback(() => {
+    const now = Date.now();
+    const taps = logoTapsRef.current;
+    taps.count = now - taps.last < 800 ? taps.count + 1 : 1;
+    taps.last = now;
+    if (taps.count >= 7) {
+      taps.count = 0;
+      router.push("/secret");
+      return;
+    }
+    reloadFeed();
+  }, [reloadFeed, router]);
+
   // When locale changes, update only titles + overviews of the current feed movies
   useEffect(() => {
     if (!isLocaleInitRef.current) { isLocaleInitRef.current = true; return; }
@@ -1318,8 +1372,13 @@ export default function TeaserflixFeed() {
     async (data: InteractionData) => {
       const rec = recommenderRef.current;
       if (!rec) return;
-      rec.recordInteraction(data);
-      if (user) await rec.persistInteraction(data);
+      // A like/save made while the card was on screen must count as interest,
+      // otherwise the row we store on leave would say "not interested".
+      const interested =
+        data.is_interested || likedIdsRef.current.has(data.movie_id) || bookmarkedIdsRef.current.has(data.movie_id);
+      const enriched = { ...data, is_interested: interested };
+      rec.recordInteraction(enriched);
+      if (user) await rec.persistInteraction(enriched);
     },
     [user],
   );
@@ -1522,7 +1581,7 @@ export default function TeaserflixFeed() {
       {/* Top bar */}
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pb-2 pointer-events-none" style={{ paddingTop: 'max(2rem, env(safe-area-inset-top))' }}>
         <button
-          onClick={reloadFeed}
+          onClick={handleLogoTap}
           className="text-white font-black uppercase tracking-tighter text-xl pointer-events-auto active:scale-95 transition"
           style={{ textShadow: "0 2px 8px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,1)" }}
         >
