@@ -239,3 +239,49 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+
+-- ============================================================
+-- SECRET MENU — GROUP SWIPE SESSIONS ("party")
+-- Guests are anonymous (no Supabase auth): the short session code acts as
+-- the shared secret and each device identifies itself with a random voter_id.
+-- ============================================================
+
+create table if not exists party_sessions (
+  code text primary key,
+  filters jsonb not null default '{}',
+  movies jsonb not null,                    -- frozen deck so everyone swipes the same movies
+  status text not null default 'open',      -- 'open' | 'closed'
+  created_at timestamp with time zone default now() not null
+);
+
+create table if not exists party_participants (
+  code text references party_sessions(code) on delete cascade not null,
+  voter_id text not null,
+  finished boolean not null default false,
+  joined_at timestamp with time zone default now() not null,
+  primary key (code, voter_id)
+);
+
+create table if not exists party_votes (
+  code text references party_sessions(code) on delete cascade not null,
+  voter_id text not null,
+  movie_id bigint not null,
+  liked boolean not null,
+  primary key (code, voter_id, movie_id)
+);
+
+alter table party_sessions enable row level security;
+alter table party_participants enable row level security;
+alter table party_votes enable row level security;
+
+create policy "party_sessions_select" on party_sessions for select to anon, authenticated using (true);
+create policy "party_sessions_insert" on party_sessions for insert to anon, authenticated with check (true);
+create policy "party_sessions_update" on party_sessions for update to anon, authenticated using (true) with check (true);
+
+create policy "party_participants_select" on party_participants for select to anon, authenticated using (true);
+create policy "party_participants_insert" on party_participants for insert to anon, authenticated with check (true);
+create policy "party_participants_update" on party_participants for update to anon, authenticated using (true) with check (true);
+
+create policy "party_votes_select" on party_votes for select to anon, authenticated using (true);
+create policy "party_votes_insert" on party_votes for insert to anon, authenticated with check (true);
