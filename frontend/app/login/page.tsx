@@ -67,7 +67,8 @@ export default function LoginPage() {
       if (error) { setError(translateAuthError(error.message, locale)); setLoading(false); }
       // On success, onAuthStateChange above redirects
     } else {
-      const { error } = await supabase.auth.signUp({ email, password });
+      // Sin emailRedirectTo el enlace de confirmación volvería al site_url compartido (Plato Plan)
+      const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/auth/callback` } });
       if (error) {
         setError(translateAuthError(error.message, locale));
       } else {
